@@ -1,0 +1,11 @@
+#version 450
+
+uniform sampler2D texture_sampler;
+uniform sampler2D lighting_sampler;
+uniform sampler2D normalmap_sampler;
+
+layout(location=0) out vec4 output_color;
+
+void main() {
+
+}

@@ -1,2 +1,2 @@
 # pogl-project
-EPITA's opengl project
+EPITA's OpenGL project
