@@ -50,4 +50,6 @@ const RGB8& rgb24_image::get_buffer() const {
 RGB8& rgb24_image::get_buffer() {
     return pixels;
 }
+
+
 }
