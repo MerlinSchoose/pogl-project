@@ -11,6 +11,9 @@
 #include "image.hh"
 #include "image_io.hh"
 #include "texload.hh"
+#include <sstream>
+
+#define CAUSTICS_SIZE 32
 
 //#define SAVE_RENDER
 
@@ -23,6 +26,7 @@
 
 GLuint floor_vao_id;
 GLuint program_id;
+GLuint caustic_idx = 0;
 
 void window_resize(int width, int height) {
     glViewport(0,0,width,height);TEST_OPENGL_ERROR();
@@ -53,18 +57,26 @@ void display() {
     glutSwapBuffers();
 }
 
+void idleFunc() {
+    caustic_idx = (caustic_idx + 1) % CAUSTICS_SIZE;
+    glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, caustic_idx + 1);TEST_OPENGL_ERROR();
+    glutPostRedisplay();
+}
+
+
 void init_glut(int &argc, char *argv[]) {
     glutInit(&argc, argv);
-    glutInitContextVersion(4,5);
+    glutInitContextVersion(4,6);
     glutInitContextProfile(GLUT_CORE_PROFILE | GLUT_DEBUG);
     glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_DEPTH);
 
     glutInitWindowSize(1024, 1024);
     glutInitWindowPosition ( 100, 100 );
-    glutCreateWindow("Shader Programming");
 
     glutDisplayFunc(display);
     glutReshapeFunc(window_resize);
+    glutIdleFunc(idleFunc);
 }
 
 bool init_glew() {
@@ -144,7 +156,8 @@ void init_uniform() {
 
 void init_textures() {
     int width, height;
-    GLuint texture_id;
+    auto *caustics_id = new GLuint[CAUSTICS_SIZE];
+    GLuint floor_id;
     GLint tex_location;
     GLint texture_units, combined_texture_units;
 
@@ -157,14 +170,14 @@ void init_textures() {
     glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
     std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
 
-    glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+    glGenTextures(1, &floor_id);TEST_OPENGL_ERROR();
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D,texture_id);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, floor_id);TEST_OPENGL_ERROR();
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, floor_texture);TEST_OPENGL_ERROR();
     glGenerateMipmap(GL_TEXTURE_2D);
 
     tex_location = glGetUniformLocation(program_id, "floor_sampler");TEST_OPENGL_ERROR();
-    //glUniform1i(tex_location, 0);TEST_OPENGL_ERROR();
+    glUniform1i(tex_location, 0);TEST_OPENGL_ERROR();
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
@@ -173,28 +186,33 @@ void init_textures() {
 
     delete floor_texture;
     // Caustics textures.
-    GLubyte *caustic_texture = read_alpha_texture("../image_test/caustics/caust00.bw", &width, &height);
-    std::cout << "caustic texture " << width << ", " <<  height << "\n";
+    glGenTextures(CAUSTICS_SIZE, caustics_id);TEST_OPENGL_ERROR();
+    char *filename = new char[64];
+    for (unsigned i = 0; i < CAUSTICS_SIZE; ++i) {
+        std::sprintf(filename, "../image_test/caustics/caust%02d.bw", i);
+        GLubyte *caustic_texture = read_alpha_texture(filename, &width, &height);
+        std::cout << "caustic texture: " << filename << width << ", " <<  height << "\n";
 
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
-    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
-    std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
+        std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
+        glBindTexture(GL_TEXTURE_2D, caustics_id[i]);TEST_OPENGL_ERROR();
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, caustic_texture);TEST_OPENGL_ERROR();
+        glGenerateMipmap(GL_TEXTURE_2D);
 
-    glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+        delete caustic_texture;
+    }
+    delete[] filename;
+
     glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, caustic_texture);TEST_OPENGL_ERROR();
-    glGenerateMipmap(GL_TEXTURE_2D);
-
+    glBindTexture(GL_TEXTURE_2D, caustic_idx + 1);TEST_OPENGL_ERROR();
     tex_location = glGetUniformLocation(program_id, "caustic_sampler");TEST_OPENGL_ERROR();
     glUniform1i(tex_location, 1);TEST_OPENGL_ERROR();
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
-
-    delete caustic_texture;
+    delete[] caustics_id;
 }
 
 std::string load(const std::string &filename) {
