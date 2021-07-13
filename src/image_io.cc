@@ -122,4 +122,43 @@ rgb24_image *load_image(const char* filename) {
   return image;
 }
 
+gray8_image *load_gray_image(const char* filename, int *width, int *height) {
+    tga_header header;
+    gray8_image *image;
+    uint8_t *buffer_bgr;
+    FILE *f = fopen(filename, "r");
+    if (f==0) {
+        std::cerr << "ERROR: can not open " << filename << " for reading!\n";
+        return 0;
+    }
+
+    if (fread(&header, sizeof(tga_header), 1, f)!=1) {
+        std::cerr << "ERROR: can not read " << filename << "!\n";
+        return 0;
+    }
+
+    if (header.pixel_depth!=8) {
+        std::cerr << "ERROR: Wrong image format (not 8bits)!\n";
+        return 0;
+    }
+    image = new gray8_image(header.width, header.height);
+
+    buffer_bgr = new uint8_t[image->length];
+    if (fread(buffer_bgr, 1, image->length, f)!=(unsigned)image->length) {
+        std::cerr << "ERROR: can not read image data!\n";
+        delete image;
+        return 0;
+    }
+
+    for(int i = 0 ; i < image->length ; i++) {
+        image->pixels[i] = buffer_bgr[i];
+    }
+    delete [] buffer_bgr;
+
+    *width = header.width;
+    *height = header.height;
+    fclose(f);
+    return image;
+}
+
 }

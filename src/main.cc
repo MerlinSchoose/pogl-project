@@ -13,7 +13,7 @@
 #include "texload.hh"
 #include <sstream>
 
-#define CAUSTICS_SIZE 32
+#define CAUSTICS_SIZE 256
 
 //#define SAVE_RENDER
 
@@ -29,7 +29,7 @@ GLuint surface_vao_id;
 GLuint program_id;
 GLuint caustic_idx = 0;
 GLuint caustic_begin = 1;
-GLuint timer = 1000 / 40;
+GLuint timer = 1000 / 120;
 GLuint blue_texture_id;
 GLuint floor_texture_id;
 
@@ -240,10 +240,9 @@ void init_textures() {
     caustic_begin = caustics_id[0];
     char *filename = new char[64];
     for (unsigned i = 0; i < CAUSTICS_SIZE; ++i) {
-        std::sprintf(filename, "../image_test/caustics/caust%02d.bw", i);
-        GLubyte *caustic_texture = read_alpha_texture(filename, &width, &height);
+        std::sprintf(filename, "../image_test/caustics_v2/CausticsRender_%03d.tga", i + 1);
+        auto *caustic_texture = tifo::load_gray_image(filename, &width, &height)->get_buffer();
         std::cout << "texture id: " << caustics_id[i] << '\n';
-        std::cout << "caustic texture: " << filename << "size: " << width << ", " <<  height << "\n";
 
         glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
         glBindTexture(GL_TEXTURE_2D, caustics_id[i]);TEST_OPENGL_ERROR();

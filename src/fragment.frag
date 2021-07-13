@@ -18,7 +18,7 @@ float fog(float depth) {
 }
 
 void main() {
-    vec4 floor_color = mix(texture(floor_sampler, vUv * 100), vec4(vec3(texture(caustic_sampler, vUv * 50).r), 1), .5);
+    vec4 floor_color = mix(texture(floor_sampler, vUv * 100), vec4(vec3(texture(caustic_sampler, vUv * 20).r), 1), .5);
 
     float z = (2.0 * gl_FragCoord.z - gl_DepthRange.near - gl_DepthRange.far) / (gl_DepthRange.far - gl_DepthRange.near);
     float fogv = fog(z);
