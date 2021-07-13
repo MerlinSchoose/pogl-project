@@ -118,13 +118,13 @@ void init_object_vbo() {
     }
 
     glBindVertexArray(0);
+}
 
-    GLuint width = 10;
-    GLuint height = 10;
+void init_uniform() {
     glm::mat4 projection_matrix = glm::perspective(
-            glm::radians(45.0f),
-            ((float) width / (float) height),
-            0.1f, 100.0f
+            glm::radians(40.0f),
+            1.0f,
+            20.0f, 100.0f
     );
 
     GLuint mp_loc = glGetUniformLocation(program_id, "projection_matrix");
@@ -134,7 +134,7 @@ void init_object_vbo() {
     glm::mat4 view_matrix = glm::lookAt(
             glm::vec3(0, 15, -20),
             glm::vec3(0, 0, 0),
-            glm::vec3(0, 1, 0)
+            glm::vec3(0, 1.0, 0)
     );
 
     glm::mat4 model_view_matrix = view_matrix * model_matrix;
@@ -146,11 +146,12 @@ void init_object_vbo() {
 void init_textures() {
     int width, height;
 
-    GLubyte *texture = read_rgb_texture("../image_test/floor.rgb", &width, &height);
+    // Floor texture.
+    GLubyte *floor_texture = read_rgb_texture("../image_test/floor.rgb", &width, &height);
     GLuint texture_id;
     GLint tex_location;
 
-    std::cout << "texture " << width << " ," <<  height << "\n";
+    std::cout << "floor texture " << width << ", " <<  height << "\n";
 
     GLint texture_units, combined_texture_units;
     glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
@@ -160,7 +161,7 @@ void init_textures() {
     glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
     glBindTexture(GL_TEXTURE_2D,texture_id);TEST_OPENGL_ERROR();
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texture);TEST_OPENGL_ERROR();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, floor_texture);TEST_OPENGL_ERROR();
 
     tex_location = glGetUniformLocation(program_id, "texture_sampler");TEST_OPENGL_ERROR();
     std::cout << "tex_location " << tex_location << std::endl;
@@ -171,106 +172,130 @@ void init_textures() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
 
-    delete texture;
+    // Caustics textures.
+    GLubyte *caustic_texture = read_alpha_texture("../image_test/caustics/caust00.bw", &width, &height);
+    std::cout << "caustic texture " << width << ", " <<  height << "\n";
+
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
+    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
+    std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
+
+    glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+    glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, caustic_texture);TEST_OPENGL_ERROR();
+
+    tex_location = glGetUniformLocation(program_id, "texture_sampler");TEST_OPENGL_ERROR();
+    std::cout << "tex_location " << tex_location << std::endl;
+    glUniform1i(tex_location, 0);TEST_OPENGL_ERROR();
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
+
+    // delete floor_texture;
+    delete caustic_texture;
 }
 
 std::string load(const std::string &filename) {
-  std::ifstream input_src_file(filename, std::ios::in);
-  std::string ligne;
-  std::string file_content="";
-  if (input_src_file.fail()) {
-    std::cerr << "FAIL\n";
-    return "";
-  }
-  while(getline(input_src_file, ligne)) {
-    file_content = file_content + ligne + "\n";
-  }
-  file_content += '\0';
-  input_src_file.close();
-  return file_content;
+    std::ifstream input_src_file(filename, std::ios::in);
+    std::string ligne;
+    std::string file_content="";
+    if (input_src_file.fail()) {
+        std::cerr << "FAIL\n";
+        return "";
+    }
+    while(getline(input_src_file, ligne)) {
+        file_content = file_content + ligne + "\n";
+    }
+    file_content += '\0';
+    input_src_file.close();
+    return file_content;
 }
 
 bool init_shaders() {
-  std::string vertex_src = load("../src/vertex.vert");
-  std::string fragment_src = load("../src/fragment.frag");
-  GLuint shader_id[2];
-  GLint compile_status = GL_TRUE;
-  char *vertex_shd_src = (char*)std::malloc(vertex_src.length()*sizeof(char));
-  char *fragment_shd_src = (char*)std::malloc(fragment_src.length()*sizeof(char));
-  vertex_src.copy(vertex_shd_src,vertex_src.length());
-  fragment_src.copy(fragment_shd_src,fragment_src.length());
+    std::string vertex_src = load("../src/vertex.vert");
+    std::string fragment_src = load("../src/fragment.frag");
+    GLuint shader_id[2];
+    GLint compile_status = GL_TRUE;
+    char *vertex_shd_src = (char*)std::malloc(vertex_src.length()*sizeof(char));
+    char *fragment_shd_src = (char*)std::malloc(fragment_src.length()*sizeof(char));
+    vertex_src.copy(vertex_shd_src,vertex_src.length());
+    fragment_src.copy(fragment_shd_src,fragment_src.length());
 
 
-  shader_id[0] = glCreateShader(GL_VERTEX_SHADER);TEST_OPENGL_ERROR();
-  shader_id[1] = glCreateShader(GL_FRAGMENT_SHADER);TEST_OPENGL_ERROR();
+    shader_id[0] = glCreateShader(GL_VERTEX_SHADER);TEST_OPENGL_ERROR();
+    shader_id[1] = glCreateShader(GL_FRAGMENT_SHADER);TEST_OPENGL_ERROR();
 
-  glShaderSource(shader_id[0], 1, (const GLchar**)&(vertex_shd_src), 0);TEST_OPENGL_ERROR();
-  glShaderSource(shader_id[1], 1, (const GLchar**)&(fragment_shd_src), 0);TEST_OPENGL_ERROR();
-  for(int i = 0 ; i < 2 ; i++) {
-    glCompileShader(shader_id[i]);TEST_OPENGL_ERROR();
-    glGetShaderiv(shader_id[i], GL_COMPILE_STATUS, &compile_status);
-    if(compile_status != GL_TRUE) {
-      GLint log_size;
-      char *shader_log;
-      glGetShaderiv(shader_id[i], GL_INFO_LOG_LENGTH, &log_size);
-      shader_log = (char*)std::malloc(log_size+1); /* +1 pour le caractere de fin de chaine '\0' */
-      if(shader_log != 0) {
-	glGetShaderInfoLog(shader_id[i], log_size, &log_size, shader_log);
-	std::cerr << "SHADER " << i << ": " << shader_log << std::endl;
-	std::free(shader_log);
-      }
-      std::free(vertex_shd_src);
-      std::free(fragment_shd_src);
-      glDeleteShader(shader_id[0]);
-      glDeleteShader(shader_id[1]);
-      return false;
+    glShaderSource(shader_id[0], 1, (const GLchar**)&(vertex_shd_src), 0);TEST_OPENGL_ERROR();
+    glShaderSource(shader_id[1], 1, (const GLchar**)&(fragment_shd_src), 0);TEST_OPENGL_ERROR();
+    for(int i = 0 ; i < 2 ; i++) {
+        glCompileShader(shader_id[i]);TEST_OPENGL_ERROR();
+        glGetShaderiv(shader_id[i], GL_COMPILE_STATUS, &compile_status);
+        if(compile_status != GL_TRUE) {
+            GLint log_size;
+            char *shader_log;
+            glGetShaderiv(shader_id[i], GL_INFO_LOG_LENGTH, &log_size);
+            shader_log = (char*)std::malloc(log_size+1); /* +1 pour le caractere de fin de chaine '\0' */
+            if(shader_log != 0) {
+                glGetShaderInfoLog(shader_id[i], log_size, &log_size, shader_log);
+                std::cerr << "SHADER " << i << ": " << shader_log << std::endl;
+                std::free(shader_log);
+            }
+            std::free(vertex_shd_src);
+            std::free(fragment_shd_src);
+            glDeleteShader(shader_id[0]);
+            glDeleteShader(shader_id[1]);
+            return false;
+        }
     }
-  }
-  std::free(vertex_shd_src);
-  std::free(fragment_shd_src);
+    std::free(vertex_shd_src);
+    std::free(fragment_shd_src);
 
 
-  GLint link_status=GL_TRUE;
-  program_id=glCreateProgram();TEST_OPENGL_ERROR();
-  if (program_id==0) return false;
+    GLint link_status=GL_TRUE;
+    program_id=glCreateProgram();TEST_OPENGL_ERROR();
+    if (program_id==0) return false;
 
-  for(int i = 0 ; i < 2 ; i++) {
-    glAttachShader(program_id, shader_id[i]);TEST_OPENGL_ERROR();
-  }
-
-  glLinkProgram(program_id);TEST_OPENGL_ERROR();
-  glGetProgramiv(program_id, GL_LINK_STATUS, &link_status);
-
-  if (link_status!=GL_TRUE) {
-    GLint log_size;
-    char *program_log;
-    glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &log_size);
-    program_log = (char*)std::malloc(log_size+1); /* +1 pour le caractere de fin de chaine '\0' */
-    if(program_log != 0) {
-      glGetProgramInfoLog(program_id, log_size, &log_size, program_log);
-      std::cerr << "Program " << program_log << std::endl;
-      std::free(program_log);
+    for(int i = 0 ; i < 2 ; i++) {
+        glAttachShader(program_id, shader_id[i]);TEST_OPENGL_ERROR();
     }
-    glDeleteProgram(program_id);TEST_OPENGL_ERROR();
-    glDeleteShader(shader_id[0]);TEST_OPENGL_ERROR();
-    glDeleteShader(shader_id[1]);TEST_OPENGL_ERROR();
-    program_id=0;
-    return false;
-  }
+
+    glLinkProgram(program_id);TEST_OPENGL_ERROR();
+    glGetProgramiv(program_id, GL_LINK_STATUS, &link_status);
+
+    if (link_status!=GL_TRUE) {
+        GLint log_size;
+        char *program_log;
+        glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &log_size);
+        program_log = (char*)std::malloc(log_size+1); /* +1 pour le caractere de fin de chaine '\0' */
+        if(program_log != 0) {
+            glGetProgramInfoLog(program_id, log_size, &log_size, program_log);
+            std::cerr << "Program " << program_log << std::endl;
+            std::free(program_log);
+        }
+        glDeleteProgram(program_id);TEST_OPENGL_ERROR();
+        glDeleteShader(shader_id[0]);TEST_OPENGL_ERROR();
+        glDeleteShader(shader_id[1]);TEST_OPENGL_ERROR();
+        program_id=0;
+        return false;
+    }
     glUseProgram(program_id);TEST_OPENGL_ERROR();
-  return true;
+    return true;
 }
 
 int main(int argc, char *argv[]) {
-  init_glut(argc, argv);
-  if (!init_glew())
-    std::exit(-1);
-  init_GL();
+    init_glut(argc, argv);
+    if (!init_glew())
+        std::exit(-1);
+    init_GL();
 
-  init_shaders();
+    init_shaders();
 
-  init_object_vbo();
-  init_textures();
+    init_object_vbo();
+    init_uniform();
+    init_textures();
 
-  glutMainLoop();
+    glutMainLoop();
 }
