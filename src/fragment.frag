@@ -1,8 +1,7 @@
 #version 450
 
-uniform sampler2D texture_sampler;
-uniform sampler2D lighting_sampler;
-uniform sampler2D normalmap_sampler;
+uniform sampler2D caustic_sampler;
+uniform sampler2D floor_sampler;
 
 in vec2 vUv;
 in vec4 center;
@@ -17,5 +16,5 @@ float fog(float depth) {
 }
 
 void main() {
-    output_color = texture(texture_sampler, vUv);
+    output_color = mix(texture(floor_sampler, vUv), vec4(vec3(texture(caustic_sampler, vUv).r), 1), .5);
 }

@@ -2,7 +2,6 @@
 #include <GL/freeglut.h>
 
 #include <glm/ext.hpp>
-#include <glm/gtx/string_cast.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -26,7 +25,7 @@ GLuint floor_vao_id;
 GLuint program_id;
 
 void window_resize(int width, int height) {
-  glViewport(0,0,width,height);TEST_OPENGL_ERROR();
+    glViewport(0,0,width,height);TEST_OPENGL_ERROR();
 }
 
 #if defined(SAVE_RENDER)
@@ -51,38 +50,38 @@ void display() {
   }
 #endif
 
-  glutSwapBuffers();
+    glutSwapBuffers();
 }
 
 void init_glut(int &argc, char *argv[]) {
-  glutInit(&argc, argv);
-  glutInitContextVersion(4,5);
-  glutInitContextProfile(GLUT_CORE_PROFILE | GLUT_DEBUG);
-  glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_DEPTH);
+    glutInit(&argc, argv);
+    glutInitContextVersion(4,5);
+    glutInitContextProfile(GLUT_CORE_PROFILE | GLUT_DEBUG);
+    glutInitDisplayMode(GLUT_RGBA|GLUT_DOUBLE|GLUT_DEPTH);
 
-  glutInitWindowSize(1024, 1024);
-  glutInitWindowPosition ( 100, 100 );
-  glutCreateWindow("Shader Programming");
+    glutInitWindowSize(1024, 1024);
+    glutInitWindowPosition ( 100, 100 );
+    glutCreateWindow("Shader Programming");
 
-  glutDisplayFunc(display);
-  glutReshapeFunc(window_resize);
+    glutDisplayFunc(display);
+    glutReshapeFunc(window_resize);
 }
 
 bool init_glew() {
-  if (glewInit()) {
-    std::cerr << " Error while initializing glew";
-    return false;
-  }
-  return true;
+    if (glewInit()) {
+        std::cerr << " Error while initializing glew";
+        return false;
+    }
+    return true;
 }
 
 void init_GL() {
-  glEnable(GL_DEPTH_TEST);TEST_OPENGL_ERROR();
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);TEST_OPENGL_ERROR();
-  glEnable(GL_CULL_FACE);TEST_OPENGL_ERROR();
-  glClearColor(0.2,0.3,0.3,1.0);TEST_OPENGL_ERROR();
-  glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-  glPixelStorei(GL_PACK_ALIGNMENT,1);
+    glEnable(GL_DEPTH_TEST);TEST_OPENGL_ERROR();
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);TEST_OPENGL_ERROR();
+    glEnable(GL_CULL_FACE);TEST_OPENGL_ERROR();
+    glClearColor(0.2,0.3,0.3,1.0);TEST_OPENGL_ERROR();
+    glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+    glPixelStorei(GL_PACK_ALIGNMENT,1);
 }
 
 
@@ -145,15 +144,15 @@ void init_uniform() {
 
 void init_textures() {
     int width, height;
+    GLuint texture_id;
+    GLint tex_location;
+    GLint texture_units, combined_texture_units;
 
     // Floor texture.
     GLubyte *floor_texture = read_rgb_texture("../image_test/floor.rgb", &width, &height);
-    GLuint texture_id;
-    GLint tex_location;
 
     std::cout << "floor texture " << width << ", " <<  height << "\n";
 
-    GLint texture_units, combined_texture_units;
     glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
     glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
     std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
@@ -162,16 +161,17 @@ void init_textures() {
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
     glBindTexture(GL_TEXTURE_2D,texture_id);TEST_OPENGL_ERROR();
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, floor_texture);TEST_OPENGL_ERROR();
+    glGenerateMipmap(GL_TEXTURE_2D);
 
-    tex_location = glGetUniformLocation(program_id, "texture_sampler");TEST_OPENGL_ERROR();
-    std::cout << "tex_location " << tex_location << std::endl;
-    glUniform1i(tex_location,0);TEST_OPENGL_ERROR();
+    tex_location = glGetUniformLocation(program_id, "floor_sampler");TEST_OPENGL_ERROR();
+    //glUniform1i(tex_location, 0);TEST_OPENGL_ERROR();
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
 
+    delete floor_texture;
     // Caustics textures.
     GLubyte *caustic_texture = read_alpha_texture("../image_test/caustics/caust00.bw", &width, &height);
     std::cout << "caustic texture " << width << ", " <<  height << "\n";
@@ -181,20 +181,19 @@ void init_textures() {
     std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
 
     glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
-    glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+    glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
     glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, caustic_texture);TEST_OPENGL_ERROR();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, caustic_texture);TEST_OPENGL_ERROR();
+    glGenerateMipmap(GL_TEXTURE_2D);
 
-    tex_location = glGetUniformLocation(program_id, "texture_sampler");TEST_OPENGL_ERROR();
-    std::cout << "tex_location " << tex_location << std::endl;
-    glUniform1i(tex_location, 0);TEST_OPENGL_ERROR();
+    tex_location = glGetUniformLocation(program_id, "caustic_sampler");TEST_OPENGL_ERROR();
+    glUniform1i(tex_location, 1);TEST_OPENGL_ERROR();
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
 
-    // delete floor_texture;
     delete caustic_texture;
 }
 
