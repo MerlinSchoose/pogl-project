@@ -25,8 +25,13 @@
 
 
 GLuint floor_vao_id;
+GLuint surface_vao_id;
 GLuint program_id;
 GLuint caustic_idx = 0;
+GLuint caustic_begin = 1;
+GLuint timer = 1000 / 40;
+GLuint blue_texture_id;
+GLuint floor_texture_id;
 
 void window_resize(int width, int height) {
     glViewport(0,0,width,height);TEST_OPENGL_ERROR();
@@ -38,8 +43,14 @@ bool saved = false;
 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);TEST_OPENGL_ERROR();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, floor_texture_id);
     glBindVertexArray(floor_vao_id);TEST_OPENGL_ERROR();
-    glDrawArrays(GL_TRIANGLES, 0, vertex_buffer_data.size());TEST_OPENGL_ERROR();
+    glDrawArrays(GL_TRIANGLES, 0, floor_vbo.size());TEST_OPENGL_ERROR();
+    glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, blue_texture_id);TEST_OPENGL_ERROR();
+    glBindVertexArray(surface_vao_id);TEST_OPENGL_ERROR();
+    glDrawArrays(GL_TRIANGLES, 0, surface_vbo.size());TEST_OPENGL_ERROR();
     glBindVertexArray(0);TEST_OPENGL_ERROR();
 
 #if defined(SAVE_RENDER)
@@ -60,8 +71,16 @@ void display() {
 void idleFunc() {
     caustic_idx = (caustic_idx + 1) % CAUSTICS_SIZE;
     glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D, caustic_idx + 1);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, caustic_idx + caustic_begin);TEST_OPENGL_ERROR();
     glutPostRedisplay();
+}
+
+void timerFunc(int value) {
+    caustic_idx = (caustic_idx + 1) % CAUSTICS_SIZE;
+    glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, caustic_idx + caustic_begin);TEST_OPENGL_ERROR();
+    glutPostRedisplay();
+    glutTimerFunc(timer, timerFunc, value);
 }
 
 
@@ -73,15 +92,20 @@ void init_glut(int &argc, char *argv[]) {
 
     glutInitWindowSize(1024, 1024);
     glutInitWindowPosition ( 100, 100 );
+    glutCreateWindow("Underwater Scene");
 
     glutDisplayFunc(display);
     glutReshapeFunc(window_resize);
-    glutIdleFunc(idleFunc);
+    glutTimerFunc(0, timerFunc, 0);
+    glutReportErrors();
 }
 
 bool init_glew() {
-    if (glewInit()) {
-        std::cerr << " Error while initializing glew";
+    glewExperimental = GL_TRUE;
+    GLenum error = glewInit();
+    if (error != GLEW_OK) {
+
+        std::cerr << " Error while initializing glew: " << glewGetErrorString(error) << std::endl;
         return false;
     }
     return true;
@@ -90,12 +114,13 @@ bool init_glew() {
 void init_GL() {
     glEnable(GL_DEPTH_TEST);TEST_OPENGL_ERROR();
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);TEST_OPENGL_ERROR();
-    glEnable(GL_CULL_FACE);TEST_OPENGL_ERROR();
-    glClearColor(0.2,0.3,0.3,1.0);TEST_OPENGL_ERROR();
+    glClearColor(0.1,0.55,0.7,1.0);TEST_OPENGL_ERROR();
     glPixelStorei(GL_UNPACK_ALIGNMENT,1);
     glPixelStorei(GL_PACK_ALIGNMENT,1);
 }
 
+void init_vao() {
+}
 
 void init_object_vbo() {
     int max_nb_vbo = 5;
@@ -105,6 +130,8 @@ void init_object_vbo() {
 
     GLint vertex_location = glGetAttribLocation(program_id,"position");TEST_OPENGL_ERROR();
     GLint uv_location = glGetAttribLocation(program_id,"uv");TEST_OPENGL_ERROR();
+
+    // floor
 
     glGenVertexArrays(1, &floor_vao_id);TEST_OPENGL_ERROR();
     glBindVertexArray(floor_vao_id);TEST_OPENGL_ERROR();
@@ -116,8 +143,32 @@ void init_object_vbo() {
 
     if (vertex_location!=-1) {
         glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-        glBufferData(GL_ARRAY_BUFFER, vertex_buffer_data.size()*sizeof(float),vertex_buffer_data.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-        glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, 0);TEST_OPENGL_ERROR();
+        glBufferData(GL_ARRAY_BUFFER, floor_vbo.size()*sizeof(float),floor_vbo.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
+        glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
+        glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
+    }
+
+    if (uv_location!=-1) {
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
+        glBufferData(GL_ARRAY_BUFFER, uv_buffer_data.size()*sizeof(float), uv_buffer_data.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
+        glVertexAttribPointer(uv_location, 2, GL_FLOAT, GL_FALSE, 0, 0);TEST_OPENGL_ERROR();
+        glEnableVertexAttribArray(uv_location);TEST_OPENGL_ERROR();
+    }
+    // surface
+
+    glGenVertexArrays(1, &surface_vao_id);TEST_OPENGL_ERROR();
+    glBindVertexArray(surface_vao_id);TEST_OPENGL_ERROR();
+    nb_vbo = 0;
+    index_vbo = 0;
+    if (vertex_location!=-1) nb_vbo++;
+    if (uv_location!=-1) nb_vbo++;
+
+    glGenBuffers(nb_vbo, vbo_ids);TEST_OPENGL_ERROR();
+
+    if (vertex_location!=-1) {
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
+        glBufferData(GL_ARRAY_BUFFER, surface_vbo.size()*sizeof(float),surface_vbo.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
+        glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
         glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
     }
 
@@ -135,7 +186,7 @@ void init_uniform() {
     glm::mat4 projection_matrix = glm::perspective(
             glm::radians(40.0f),
             1.0f,
-            20.0f, 100.0f
+            5.f, 1500.0f
     );
 
     GLuint mp_loc = glGetUniformLocation(program_id, "projection_matrix");
@@ -143,8 +194,8 @@ void init_uniform() {
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
     glm::mat4 view_matrix = glm::lookAt(
-            glm::vec3(0, 15, -20),
-            glm::vec3(0, 0, 0),
+            glm::vec3(0, -70, -50),
+            glm::vec3(0, -70, 0),
             glm::vec3(0, 1.0, 0)
     );
 
@@ -157,7 +208,6 @@ void init_uniform() {
 void init_textures() {
     int width, height;
     auto *caustics_id = new GLuint[CAUSTICS_SIZE];
-    GLuint floor_id;
     GLint tex_location;
     GLint texture_units, combined_texture_units;
 
@@ -170,9 +220,9 @@ void init_textures() {
     glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
     std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
 
-    glGenTextures(1, &floor_id);TEST_OPENGL_ERROR();
+    glGenTextures(1, &floor_texture_id);TEST_OPENGL_ERROR();
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D, floor_id);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, floor_texture_id);TEST_OPENGL_ERROR();
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, floor_texture);TEST_OPENGL_ERROR();
     glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -187,15 +237,15 @@ void init_textures() {
     delete floor_texture;
     // Caustics textures.
     glGenTextures(CAUSTICS_SIZE, caustics_id);TEST_OPENGL_ERROR();
+    caustic_begin = caustics_id[0];
     char *filename = new char[64];
     for (unsigned i = 0; i < CAUSTICS_SIZE; ++i) {
         std::sprintf(filename, "../image_test/caustics/caust%02d.bw", i);
         GLubyte *caustic_texture = read_alpha_texture(filename, &width, &height);
-        std::cout << "caustic texture: " << filename << width << ", " <<  height << "\n";
+        std::cout << "texture id: " << caustics_id[i] << '\n';
+        std::cout << "caustic texture: " << filename << "size: " << width << ", " <<  height << "\n";
 
-        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
-        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
-        std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
+        glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
         glBindTexture(GL_TEXTURE_2D, caustics_id[i]);TEST_OPENGL_ERROR();
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, caustic_texture);TEST_OPENGL_ERROR();
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -212,6 +262,18 @@ void init_textures() {
     glBindTexture(GL_TEXTURE_2D, caustic_idx + 1);TEST_OPENGL_ERROR();
     tex_location = glGetUniformLocation(program_id, "caustic_sampler");TEST_OPENGL_ERROR();
     glUniform1i(tex_location, 1);TEST_OPENGL_ERROR();
+
+    unsigned char blue[3] = {0, 89, 179};
+
+    glGenTextures(1, &blue_texture_id);TEST_OPENGL_ERROR();
+    glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+    glBindTexture(GL_TEXTURE_2D, blue_texture_id);TEST_OPENGL_ERROR();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, blue);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+
     delete[] caustics_id;
 }
 
@@ -305,9 +367,9 @@ bool init_shaders() {
 int main(int argc, char *argv[]) {
     init_glut(argc, argv);
     if (!init_glew())
-        std::exit(-1);
-    init_GL();
+        std::exit(1);
 
+    init_GL();
     init_shaders();
 
     init_object_vbo();
