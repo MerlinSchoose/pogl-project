@@ -2,16 +2,15 @@
 #include <GL/freeglut.h>
 
 #include <glm/ext.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 
 #include <iostream>
 #include <fstream>
 #include <vector>
 
 #include "object_vbo.hh"
-#include "image.hh"
 #include "image_io.hh"
 #include "texload.hh"
-#include <sstream>
 
 #define CAUSTICS_SIZE 256
 
@@ -27,11 +26,18 @@
 GLuint floor_vao_id;
 GLuint surface_vao_id;
 GLuint program_id;
+
 GLuint caustic_idx = 0;
 GLuint caustic_begin = 1;
 GLuint timer = 1000 / 120;
+
 GLuint blue_texture_id;
 GLuint floor_texture_id;
+
+glm::vec3 camera_pos = glm::vec3(0.0f, -70.0f,  0.0f);
+glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, 1.0f);
+glm::vec3 camera_up = glm::vec3(0.0f, 1.0f,  0.0f);
+float camera_speed = 1.0f;
 
 void window_resize(int width, int height) {
     glViewport(0,0,width,height);TEST_OPENGL_ERROR();
@@ -83,6 +89,78 @@ void timerFunc(int value) {
     glutTimerFunc(timer, timerFunc, value);
 }
 
+void keyboardFunc(unsigned char c, int x, int y) {
+    switch (c) {
+        // W to move forward.
+        case 'w':
+            camera_pos += camera_front * camera_speed;
+            break;
+        // S to move backward.
+        case 's':
+            camera_pos -= camera_front * camera_speed;
+            break;
+
+        // A to straff left.
+        case 'a':
+            camera_pos -= glm::normalize(glm::cross(camera_front, camera_up)) * camera_speed;
+            break;
+        // d to straff right.
+        case 'd':
+            camera_pos += glm::normalize(glm::cross(camera_front, camera_up)) * camera_speed;
+            break;
+
+        // Escape button to exit.
+        case 27:
+            exit(0);
+            break;
+    }
+
+    glm::mat4 model_matrix = glm::mat4(1.0f);
+    glm::mat4 view_matrix = glm::lookAt(
+            camera_pos,
+            camera_pos + camera_front,
+            camera_up
+    );
+
+    glm::mat4 model_view_matrix = view_matrix * model_matrix;
+
+    GLuint mv_loc = glGetUniformLocation(program_id, "model_view_matrix");
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);
+}
+
+void keyboardSpecialFunc(int c, int x, int y) {
+    switch (c) {
+        // Up key to rotate the camera upward.
+        case GLUT_KEY_UP:
+            camera_front = glm::rotate(camera_front, 0.1f * camera_speed, glm::vec3(1.0f, 0.0f, 0.0f));
+            break;
+        // Down key to rotate the camera downward.
+        case GLUT_KEY_DOWN:
+            camera_front = glm::rotate(camera_front, -0.1f * camera_speed, glm::vec3(1.0f, 0.0f, 0.0f));
+            break;
+
+        // Left key to rotate the camera to the left.
+        case GLUT_KEY_LEFT:
+            camera_front = glm::rotate(camera_front, 0.1f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
+            break;
+        // Right key to rotate the camera to the right.
+        case GLUT_KEY_RIGHT:
+            camera_front = glm::rotate(camera_front, -0.1f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
+            break;
+    }
+
+    glm::mat4 model_matrix = glm::mat4(1.0f);
+    glm::mat4 view_matrix = glm::lookAt(
+            camera_pos,
+            camera_pos + camera_front,
+            camera_up
+    );
+
+    glm::mat4 model_view_matrix = view_matrix * model_matrix;
+
+    GLuint mv_loc = glGetUniformLocation(program_id, "model_view_matrix");
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);
+}
 
 void init_glut(int &argc, char *argv[]) {
     glutInit(&argc, argv);
@@ -96,7 +174,11 @@ void init_glut(int &argc, char *argv[]) {
 
     glutDisplayFunc(display);
     glutReshapeFunc(window_resize);
+
     glutTimerFunc(0, timerFunc, 0);
+    glutKeyboardFunc(keyboardFunc);
+    glutSpecialFunc(keyboardSpecialFunc);
+
     glutReportErrors();
 }
 
@@ -117,9 +199,6 @@ void init_GL() {
     glClearColor(0.1,0.55,0.7,1.0);TEST_OPENGL_ERROR();
     glPixelStorei(GL_UNPACK_ALIGNMENT,1);
     glPixelStorei(GL_PACK_ALIGNMENT,1);
-}
-
-void init_vao() {
 }
 
 void init_object_vbo() {
@@ -194,9 +273,9 @@ void init_uniform() {
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
     glm::mat4 view_matrix = glm::lookAt(
-            glm::vec3(0, -70, -50),
-            glm::vec3(0, -70, 0),
-            glm::vec3(0, 1.0, 0)
+            camera_pos,
+            camera_pos + camera_front,
+            camera_up
     );
 
     glm::mat4 model_view_matrix = view_matrix * model_matrix;
