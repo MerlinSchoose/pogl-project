@@ -15,7 +15,7 @@
 namespace tifo {
 
   bool save_image(rgb24_image &image, const char *filename);
-  rgb24_image *load_image(const char* filename);
+  rgb24_image *load_image(const char* filename, int *width, int *height);
     gray8_image *load_gray_image(const char* filename, int *width, int *height);
 
 }
