@@ -30,7 +30,7 @@ GLuint timer = 1000 / 60;
 GLuint blue_texture_id;
 GLuint floor_texture_id;
 
-glm::vec3 camera_pos = glm::vec3(0.0f, -80.0f,  0.0f);
+glm::vec3 camera_pos = glm::vec3(0.0f, -810.0f,  0.0f);
 glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, 1.0f);
 glm::vec3 camera_up = glm::vec3(0.0f, 1.0f,  0.0f);
 float camera_speed = 3.0f;
@@ -97,6 +97,9 @@ void keyboardFunc(unsigned char c, int x, int y) {
         case 'd':
             camera_pos += glm::normalize(glm::cross(camera_front, camera_up)) * camera_speed;
             break;
+        case ' ':
+            camera_pos += glm::vec3(0.f, 1.f, 0.f) * camera_speed;
+            break;
 
         // Escape button to exit.
         case 27:
@@ -113,10 +116,18 @@ void keyboardFunc(unsigned char c, int x, int y) {
 
     glm::mat4 model_view_matrix = view_matrix * model_matrix;
 
+    main_program->use();
     GLuint mv_loc = glGetUniformLocation(main_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
     glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
 
     GLuint cp_loc = glGetUniformLocation(main_program->id, "cameraPos");TEST_OPENGL_ERROR();
+    glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
+
+    background_program->use();
+    mv_loc = glGetUniformLocation(background_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+
+    cp_loc = glGetUniformLocation(background_program->id, "cameraPos");TEST_OPENGL_ERROR();
     glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
 }
 
@@ -139,6 +150,9 @@ void keyboardSpecialFunc(int c, int x, int y) {
         case GLUT_KEY_RIGHT:
             camera_front = glm::rotate(camera_front, -0.1f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
             break;
+        case GLUT_KEY_CTRL_L:
+            camera_pos -= glm::vec3(0.f, 1.f, 0.f) * camera_speed;
+            break;
     }
 
     glm::mat4 model_matrix = glm::mat4(1.0f);
@@ -153,9 +167,16 @@ void keyboardSpecialFunc(int c, int x, int y) {
     main_program->use();
     GLuint mv_loc = glGetUniformLocation(main_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
     glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+
+    GLuint cp_loc = glGetUniformLocation(main_program->id, "cameraPos");TEST_OPENGL_ERROR();
+    glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
+
     background_program->use();
     mv_loc = glGetUniformLocation(background_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
     glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+
+    cp_loc = glGetUniformLocation(background_program->id, "cameraPos");TEST_OPENGL_ERROR();
+    glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
 }
 
 void init_glut(int &argc, char *argv[]) {
