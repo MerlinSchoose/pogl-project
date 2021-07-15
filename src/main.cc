@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <fstream>
+#include <sstream>
 
 #include "opengl.hh"
 #include "object_vbo.hh"
@@ -20,6 +22,10 @@
 GLuint floor_vao_id;
 GLuint surface_vao_id;
 GLuint background_vao_id;
+GLuint fish_vao_id;
+
+GLsizeiptr fish_vbo_size;
+
 program *main_program;
 program *background_program;
 
@@ -43,21 +49,74 @@ void window_resize(int width, int height) {
 bool saved = false;
 #endif
 
+void load_obj(const char* filename, std::vector<glm::vec4> &vertices,
+              std::vector<glm::vec3> &normals, std::vector<GLushort> &elements)
+{
+    std::ifstream in(filename, std::ios::in);
+    if (!in) {
+        std::cerr << "Cannot open " << filename << std::endl;
+        exit(1);
+    }
+
+    std::string line;
+    while (getline(in, line))
+    {
+        if (line.substr(0,2) == "v ")
+        {
+            std::istringstream s(line.substr(2));
+            glm::vec4 v; s >> v.x; s >> v.y; s >> v.z; v.w = 1.0f;
+            vertices.push_back(v);
+        }
+        else if (line.substr(0,2) == "f ")
+        {
+            std::istringstream s(line.substr(2));
+            GLushort a,b,c;
+            s >> a; s >> b; s >> c;
+            a--; b--; c--;
+            elements.push_back(a); elements.push_back(b); elements.push_back(c);
+        }
+    }
+
+    normals.resize(vertices.size(), glm::vec3(0.0, 0.0, 0.0));
+    for (int i = 0; i < elements.size(); i+=3)
+    {
+        GLushort ia = (elements[i] + vertices.size()) % vertices.size();
+        GLushort ib = (elements[i+1] + vertices.size()) % vertices.size();
+        GLushort ic = (elements[i+2] + vertices.size()) % vertices.size();
+        glm::vec3 normal = glm::normalize(glm::cross(
+                glm::vec3(vertices[ib]) - glm::vec3(vertices[ia]),
+                glm::vec3(vertices[ic]) - glm::vec3(vertices[ia])));
+        normals[ia] = normals[ib] = normals[ic] = normal;
+    }
+}
+
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);TEST_OPENGL_ERROR();
     main_program->use();
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, floor_texture_id);
     glBindVertexArray(floor_vao_id);TEST_OPENGL_ERROR();
+
     glDrawArrays(GL_TRIANGLES, 0, floor_vbo.size());TEST_OPENGL_ERROR();
+
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
     glBindTexture(GL_TEXTURE_2D, blue_texture_id);TEST_OPENGL_ERROR();
     glBindVertexArray(surface_vao_id);TEST_OPENGL_ERROR();
+
     glDrawArrays(GL_TRIANGLES, 0, surface_vbo.size());TEST_OPENGL_ERROR();
+
+    glBindVertexArray(fish_vao_id);TEST_OPENGL_ERROR();
+
+    glDrawArrays(GL_TRIANGLES, 0, fish_vbo_size);
+
     glBindVertexArray(0);TEST_OPENGL_ERROR();
+
     background_program->use();
     glBindVertexArray(background_vao_id);TEST_OPENGL_ERROR();
+
     glDrawArrays(GL_TRIANGLES, 0, background_vbo.size());TEST_OPENGL_ERROR();
+
     main_program->use();
 
     glutSwapBuffers();
@@ -226,7 +285,7 @@ void init_object_vbo() {
     GLint vertex_location = glGetAttribLocation(main_program->id, "position");TEST_OPENGL_ERROR();
     GLint uv_location = glGetAttribLocation(main_program->id, "uv");TEST_OPENGL_ERROR();
 
-    // floor
+    // Floor
     glGenVertexArrays(1, &floor_vao_id);TEST_OPENGL_ERROR();
     glBindVertexArray(floor_vao_id);TEST_OPENGL_ERROR();
 
@@ -248,8 +307,8 @@ void init_object_vbo() {
         glVertexAttribPointer(uv_location, 2, GL_FLOAT, GL_FALSE, 0, 0);TEST_OPENGL_ERROR();
         glEnableVertexAttribArray(uv_location);TEST_OPENGL_ERROR();
     }
-    // surface
 
+    // Surface
     glGenVertexArrays(1, &surface_vao_id);TEST_OPENGL_ERROR();
     glBindVertexArray(surface_vao_id);TEST_OPENGL_ERROR();
     nb_vbo = 0;
@@ -271,6 +330,28 @@ void init_object_vbo() {
         glBufferData(GL_ARRAY_BUFFER, uv_buffer_data.size()*sizeof(float), uv_buffer_data.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
         glVertexAttribPointer(uv_location, 2, GL_FLOAT, GL_FALSE, 0, 0);TEST_OPENGL_ERROR();
         glEnableVertexAttribArray(uv_location);TEST_OPENGL_ERROR();
+    }
+
+    // Fish
+    std::vector<glm::vec4> fish_vertices;
+    std::vector<glm::vec3> fish_normals;
+    std::vector<GLushort> fish_elements;
+
+    load_obj("../image_test/objs/suzanne.obj", fish_vertices, fish_normals, fish_elements);
+    fish_vbo_size = fish_vertices.size();
+
+    glGenVertexArrays(1, &fish_vao_id);TEST_OPENGL_ERROR();
+    glBindVertexArray(fish_vao_id);TEST_OPENGL_ERROR();
+
+    if (vertex_location!=-1) nb_vbo++;
+
+    glGenBuffers(nb_vbo, vbo_ids);TEST_OPENGL_ERROR();
+
+    if (vertex_location!=-1) {
+        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
+        glBufferData(GL_ARRAY_BUFFER, fish_vbo_size * sizeof(fish_vertices[0]), fish_vertices.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
+        glVertexAttribPointer(vertex_location, 4, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
+        glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
     }
 
     glBindVertexArray(0);
