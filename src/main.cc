@@ -17,8 +17,11 @@ Vao *surface_vao;
 Vao *background_vao;
 
 std::vector<Vao *> fish_vaos;
+std::vector<Vao *> fish_2_vaos;
 std::vector<Vao *> rock_vaos;
 std::vector<Vao *> grass_vaos;
+std::vector<Vao *> grass_2_vaos;
+std::vector<Vao *> grass_3_vaos;
 
 program *main_program;
 program *background_program;
@@ -61,17 +64,67 @@ void display() {
         vao->draw();
     }
 
-    model_matrix = glm::translate(glm::vec3(0.0f, -49.5f, -30.f));
+    model_matrix = glm::rotate(glm::translate(glm::vec3(30.0f, -42.f, -45.f)), -glm::radians(60.f), glm::vec3(0,1,0));
     glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
-    rock_vaos[0]->draw();
+    for (auto vao: fish_vaos) {
+        vao->draw();
+    }
 
-    model_matrix = glm::translate(glm::vec3(10.0f, -49.5f, -50.f));
+    model_matrix = glm::rotate(glm::scale(glm::translate(glm::vec3(5.0f, -45.f, -60.f)), glm::vec3(.5f)),
+                               -glm::radians(60.f), glm::vec3(0,1,0));
     glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
-    rock_vaos[0]->draw();
+    for (auto vao: fish_2_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::scale(glm::translate(glm::vec3(0.0f, -49.5f, -30.f)), glm::vec3(3.0f));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: rock_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::rotate(glm::scale(glm::translate(glm::vec3(10.0f, -49.5f, -50.f)), glm::vec3(2.5f)),
+                               glm::radians(90.f), glm::vec3(0, 1, 0));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: rock_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::scale(glm::translate(glm::vec3(-25.0f, -49.5f, -70.f)), glm::vec3(3.f));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: rock_vaos) {
+        vao->draw();
+    }
 
     model_matrix = glm::scale(glm::translate(glm::vec3(15.0f, -49.5f, -30.f)), glm::vec3(10.0f));
     glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
-    grass_vaos[0]->draw();
+    for (auto vao: grass_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::scale(glm::translate(glm::vec3(-30.0f, -49.5f, -50.f)), glm::vec3(20.0f));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: grass_2_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::scale(glm::translate(glm::vec3(0.0f, -49.5f, -70.f)), glm::vec3(15.0f));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: grass_2_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::scale(glm::translate(glm::vec3(-15.0f, -49.5f, -55.f)), glm::vec3(20.0f));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: grass_3_vaos) {
+        vao->draw();
+    }
+
+    model_matrix = glm::scale(glm::translate(glm::vec3(30.0f, -49.5f, -45.f)), glm::vec3(17.0f));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
+    for (auto vao: grass_3_vaos) {
+        vao->draw();
+    }
 
     background_program->use();
 
@@ -80,13 +133,6 @@ void display() {
     main_program->use();
 
     glutSwapBuffers();
-}
-
-void idleFunc() {
-    caustic_idx = (caustic_idx + 1) % CAUSTICS_SIZE;
-    glActiveTexture(GL_TEXTURE1);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D, caustic_idx + caustic_begin);TEST_OPENGL_ERROR();
-    glutPostRedisplay();TEST_OPENGL_ERROR();
 }
 
 void timerFunc(int value) {
@@ -321,6 +367,60 @@ void init_fish_vao() {
     glBindVertexArray(0);
 }
 
+void init_fish_2_vao() {
+    // Fish 2
+    GLint vertex_location = glGetAttribLocation(obj_program->id, "position");TEST_OPENGL_ERROR();
+    GLint uv_location = glGetAttribLocation(obj_program->id, "uv");TEST_OPENGL_ERROR();
+    objl::Loader loader;
+    bool is_loaded = loader.LoadFile("../image_test/objs/Fish2.obj");
+
+    if (!is_loaded) {
+        std::cerr << "Could not load obj or mtl file";
+        exit(1);
+    }
+
+    for (size_t i = 0; i < loader.LoadedMeshes.size(); ++i) {
+        auto mesh = loader.LoadedMeshes[i];
+        GLuint texture_id = -1;
+
+        if (loader.LoadedMaterials.size() > i) {
+            auto texture = loader.LoadedMaterials[i];
+
+            glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+            glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+            glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_FLOAT, &texture.Kd);TEST_OPENGL_ERROR();
+            glGenerateMipmap(GL_TEXTURE_2D);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+        }
+
+        std::vector<GLfloat> vertices;
+        std::vector<GLfloat> uv;
+        std::vector<GLuint> indices;
+
+        for (auto index : mesh.Indices) {
+            indices.push_back(index);
+        }
+
+        for (auto vertex : mesh.Vertices) {
+            vertices.push_back(vertex.Position.X);
+            vertices.push_back(vertex.Position.Y);
+            vertices.push_back(vertex.Position.Z);
+
+            uv.push_back(vertex.TextureCoordinate.X);
+            uv.push_back(vertex.TextureCoordinate.Y);
+        }
+
+        fish_2_vaos.push_back(Vao::make_vao(vertex_location, vertices, texture_id, uv_location, uv, indices));
+    }
+
+    glBindVertexArray(0);
+}
+
 void init_rock_vao() {
     // Rock
     GLint vertex_location = glGetAttribLocation(obj_program->id, "position");TEST_OPENGL_ERROR();
@@ -424,6 +524,114 @@ void init_grass_vao() {
         }
 
         grass_vaos.push_back(Vao::make_vao(vertex_location, vertices, texture_id, uv_location, uv, indices));
+    }
+
+    glBindVertexArray(0);
+}
+
+void init_grass_2_vao() {
+    // Grass 2
+    GLint vertex_location = glGetAttribLocation(obj_program->id, "position");TEST_OPENGL_ERROR();
+    GLint uv_location = glGetAttribLocation(obj_program->id, "uv");TEST_OPENGL_ERROR();
+    objl::Loader loader;
+    bool is_loaded = loader.LoadFile("../image_test/objs/Grass2.obj");
+
+    if (!is_loaded) {
+        std::cerr << "Could not load obj or mtl file";
+        exit(1);
+    }
+
+    for (size_t i = 0; i < loader.LoadedMeshes.size(); ++i) {
+        auto mesh = loader.LoadedMeshes[i];
+        GLuint texture_id = -1;
+
+        if (loader.LoadedMaterials.size() > i) {
+            auto texture = loader.LoadedMaterials[i];
+
+            glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+            glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+            glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_FLOAT, &texture.Kd);TEST_OPENGL_ERROR();
+            glGenerateMipmap(GL_TEXTURE_2D);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+        }
+
+        std::vector<GLfloat> vertices;
+        std::vector<GLfloat> uv;
+        std::vector<GLuint> indices;
+
+        for (auto index : mesh.Indices) {
+            indices.push_back(index);
+        }
+
+        for (auto vertex : mesh.Vertices) {
+            vertices.push_back(vertex.Position.X);
+            vertices.push_back(vertex.Position.Y);
+            vertices.push_back(vertex.Position.Z);
+
+            uv.push_back(vertex.TextureCoordinate.X);
+            uv.push_back(vertex.TextureCoordinate.Y);
+        }
+
+        grass_2_vaos.push_back(Vao::make_vao(vertex_location, vertices, texture_id, uv_location, uv, indices));
+    }
+
+    glBindVertexArray(0);
+}
+
+void init_grass_3_vao() {
+    // Grass 3
+    GLint vertex_location = glGetAttribLocation(obj_program->id, "position");TEST_OPENGL_ERROR();
+    GLint uv_location = glGetAttribLocation(obj_program->id, "uv");TEST_OPENGL_ERROR();
+    objl::Loader loader;
+    bool is_loaded = loader.LoadFile("../image_test/objs/Grass3.obj");
+
+    if (!is_loaded) {
+        std::cerr << "Could not load obj or mtl file";
+        exit(1);
+    }
+
+    for (size_t i = 0; i < loader.LoadedMeshes.size(); ++i) {
+        auto mesh = loader.LoadedMeshes[i];
+        GLuint texture_id = -1;
+
+        if (loader.LoadedMaterials.size() > i) {
+            auto texture = loader.LoadedMaterials[i];
+
+            glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+            glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+            glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_FLOAT, &texture.Kd);TEST_OPENGL_ERROR();
+            glGenerateMipmap(GL_TEXTURE_2D);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+        }
+
+        std::vector<GLfloat> vertices;
+        std::vector<GLfloat> uv;
+        std::vector<GLuint> indices;
+
+        for (auto index : mesh.Indices) {
+            indices.push_back(index);
+        }
+
+        for (auto vertex : mesh.Vertices) {
+            vertices.push_back(vertex.Position.X);
+            vertices.push_back(vertex.Position.Y);
+            vertices.push_back(vertex.Position.Z);
+
+            uv.push_back(vertex.TextureCoordinate.X);
+            uv.push_back(vertex.TextureCoordinate.Y);
+        }
+
+        grass_3_vaos.push_back(Vao::make_vao(vertex_location, vertices, texture_id, uv_location, uv, indices));
     }
 
     glBindVertexArray(0);
@@ -571,9 +779,13 @@ int main(int argc, char *argv[]) {
 
     obj_program->use();
     init_uniform(obj_program->id);
+
     init_fish_vao();
+    init_fish_2_vao();
     init_rock_vao();
     init_grass_vao();
+    init_grass_2_vao();
+    init_grass_3_vao();
 
     background_program->use();
     init_background_vao();
