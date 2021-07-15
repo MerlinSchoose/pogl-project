@@ -51,6 +51,10 @@ void display() {
     surface_vao->draw();
 
     fish_program->use();
+
+    GLuint mv_loc = glGetUniformLocation(main_program->id, "model_matrix");TEST_OPENGL_ERROR();
+    auto model_matrix = glm::rotate(glm::translate(glm::vec3(0.0f, -10.f, 20.f)), glm::radians(90.f), glm::vec3(0,1,0));
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
     for (auto vao : fish_vaos) {
         vao->draw();
     }
