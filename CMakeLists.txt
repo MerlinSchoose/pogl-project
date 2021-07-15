@@ -13,7 +13,6 @@ add_executable(main
         src/main.cc
         src/image.cc
         src/image_io.cc
-        src/texload.cc
-        src/shaders.cc src/shaders.hh src/opengl.hh)
+        src/shaders.cc src/shaders.hh src/opengl.hh src/vao.cc src/vao.hh)
 
 target_link_libraries( ${PROJECT_NAME} -lGLEW -lGL -lglut -lGLU)

@@ -6,25 +6,19 @@
 #include "image_io.hh"
 #include "shaders.hh"
 #include "obj_loader.hh"
+#include "vao.hh"
 
 #define CAUSTICS_SIZE 512
 
 //#define SAVE_RENDER
 
-#define TEST_OPENGL_ERROR()                                                             \
-  do {									\
-    GLenum err = glGetError();					                        \
-    if (err != GL_NO_ERROR) std::cerr << "OpenGL ERROR! " << __LINE__ << " " << gluErrorString(err) << std::endl;      \
-  } while(0)
-
-GLuint floor_vao_id;
-GLuint surface_vao_id;
-GLuint background_vao_id;
-GLuint fish_vao_id;
-
-GLsizeiptr fish_vbo_size;
+Vao *floor_vao;
+Vao *surface_vao;
+Vao *background_vao;
+std::vector<Vao *> fish_vaos;
 
 program *main_program;
+program *fish_program;
 program *background_program;
 
 GLuint caustic_idx = 0;
@@ -33,6 +27,7 @@ GLuint timer = 1000 / 60;
 
 GLuint blue_texture_id;
 GLuint floor_texture_id;
+GLuint fish_texture_id;
 
 glm::vec3 camera_pos = glm::vec3(0.0f, -10.0f,  0.0f);
 glm::vec3 camera_front = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -51,31 +46,18 @@ void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);TEST_OPENGL_ERROR();
     main_program->use();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, floor_texture_id);
-    glBindVertexArray(floor_vao_id);TEST_OPENGL_ERROR();
+    floor_vao->draw();
 
-    glDrawArrays(GL_TRIANGLES, 0, floor_vbo.size());TEST_OPENGL_ERROR();
+    surface_vao->draw();
 
-    glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D, blue_texture_id);TEST_OPENGL_ERROR();
-    glBindVertexArray(surface_vao_id);TEST_OPENGL_ERROR();
-
-    glDrawArrays(GL_TRIANGLES, 0, surface_vbo.size());TEST_OPENGL_ERROR();
-
-    glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
-    glBindTexture(GL_TEXTURE_2D, blue_texture_id);TEST_OPENGL_ERROR();
-    glBindVertexArray(fish_vao_id);TEST_OPENGL_ERROR();
-
-    glDrawElements(GL_TRIANGLES, fish_vbo_size, GL_UNSIGNED_INT, 0);TEST_OPENGL_ERROR();
-    // glDrawArrays(GL_TRIANGLES, 0, fish_vbo_size);TEST_OPENGL_ERROR();
-
-    glBindVertexArray(0);TEST_OPENGL_ERROR();
+    fish_program->use();
+    for (auto vao : fish_vaos) {
+        vao->draw();
+    }
 
     background_program->use();
-    glBindVertexArray(background_vao_id);TEST_OPENGL_ERROR();
 
-    glDrawArrays(GL_TRIANGLES, 0, background_vbo.size());TEST_OPENGL_ERROR();
+    background_vao->draw();
 
     main_program->use();
 
@@ -133,18 +115,23 @@ void keyboardFunc(unsigned char c, int x, int y) {
             camera_up
     );
 
-    glm::mat4 model_view_matrix = view_matrix * model_matrix;
-
     main_program->use();
-    GLuint mv_loc = glGetUniformLocation(main_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
-    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+    GLuint mv_loc = glGetUniformLocation(main_program->id, "view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &view_matrix[0][0]);TEST_OPENGL_ERROR();
 
     GLuint cp_loc = glGetUniformLocation(main_program->id, "cameraPos");TEST_OPENGL_ERROR();
     glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
 
+    fish_program->use();
+    mv_loc = glGetUniformLocation(fish_program->id, "view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &view_matrix[0][0]);TEST_OPENGL_ERROR();
+
+    cp_loc = glGetUniformLocation(fish_program->id, "cameraPos");TEST_OPENGL_ERROR();
+    glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
+
     background_program->use();
-    mv_loc = glGetUniformLocation(background_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
-    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+    mv_loc = glGetUniformLocation(background_program->id, "view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &view_matrix[0][0]);TEST_OPENGL_ERROR();
 
     cp_loc = glGetUniformLocation(background_program->id, "cameraPos");TEST_OPENGL_ERROR();
     glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
@@ -154,40 +141,47 @@ void keyboardSpecialFunc(int c, int x, int y) {
     switch (c) {
         // Up key to rotate the camera upward.
         case GLUT_KEY_UP:
-            camera_front = glm::rotate(camera_front, 0.1f, glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f)));
+            camera_front = glm::rotate(camera_front, 0.03f, glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f)));
             break;
         // Down key to rotate the camera downward.
         case GLUT_KEY_DOWN:
-            camera_front = glm::rotate(camera_front, -0.1f, glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f)));
+            camera_front = glm::rotate(camera_front, -0.03f, glm::cross(camera_front, glm::vec3(0.0f, 1.0f, 0.0f)));
             break;
 
         // Left key to rotate the camera to the left.
         case GLUT_KEY_LEFT:
-            camera_front = glm::rotate(camera_front, 0.1f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
+            camera_front = glm::rotate(camera_front, 0.03f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
             break;
         // Right key to rotate the camera to the right.
         case GLUT_KEY_RIGHT:
-            camera_front = glm::rotate(camera_front, -0.1f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
+            camera_front = glm::rotate(camera_front, -0.03f * camera_speed, glm::vec3(0.0f, 1.0f, 0.0f));
             break;
         case GLUT_KEY_CTRL_L:
             camera_pos -= glm::vec3(0.f, 1.f, 0.f) * camera_speed;
             break;
     }
 
-    glm::mat4 model_matrix = glm::mat4(1.0f);
     glm::mat4 view_matrix = glm::lookAt(
             camera_pos,
             camera_pos + camera_front,
             camera_up
     );
 
-    glm::mat4 model_view_matrix = view_matrix * model_matrix;
+    glm::mat4 model_view_matrix = view_matrix;
 
     main_program->use();
-    GLuint mv_loc = glGetUniformLocation(main_program->id, "model_view_matrix");TEST_OPENGL_ERROR();
-    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+    GLuint mv_loc = glGetUniformLocation(main_program->id, "view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &view_matrix[0][0]);TEST_OPENGL_ERROR();
 
     GLuint cp_loc = glGetUniformLocation(main_program->id, "cameraPos");TEST_OPENGL_ERROR();
+    glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
+
+
+    fish_program->use();
+    mv_loc = glGetUniformLocation(fish_program->id, "view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &view_matrix[0][0]);TEST_OPENGL_ERROR();
+
+    cp_loc = glGetUniformLocation(fish_program->id, "cameraPos");TEST_OPENGL_ERROR();
     glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
 
     background_program->use();
@@ -237,139 +231,71 @@ void init_GL() {
 }
 
 void init_object_vbo() {
-    int max_nb_vbo = 5;
-    int nb_vbo = 0;
-    int index_vbo = 0;
-    GLuint vbo_ids[max_nb_vbo];
-
     GLint vertex_location = glGetAttribLocation(main_program->id, "position");TEST_OPENGL_ERROR();
     GLint uv_location = glGetAttribLocation(main_program->id, "uv");TEST_OPENGL_ERROR();
 
     // Floor
-    glGenVertexArrays(1, &floor_vao_id);TEST_OPENGL_ERROR();
-    glBindVertexArray(floor_vao_id);TEST_OPENGL_ERROR();
-
-    if (vertex_location != -1) nb_vbo++;
-    if (uv_location != -1) nb_vbo++;
-
-    glGenBuffers(nb_vbo, vbo_ids);
-    TEST_OPENGL_ERROR();
-
-    if (vertex_location != -1) {
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-        glBufferData(GL_ARRAY_BUFFER, floor_vbo.size() * sizeof(float), floor_vbo.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-        glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
-        glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
-    }
-
-    if (uv_location != -1) {
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-        glBufferData(GL_ARRAY_BUFFER, uv_buffer_data.size() * sizeof(float), uv_buffer_data.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-        glVertexAttribPointer(uv_location, 2, GL_FLOAT, GL_FALSE, 0, 0);TEST_OPENGL_ERROR();
-        glEnableVertexAttribArray(uv_location);TEST_OPENGL_ERROR();
-    }
+    floor_vao = Vao::make_vao(vertex_location, floor_vbo, floor_texture_id, uv_location, uv_buffer_data);
 
     // Surface
-    glGenVertexArrays(1, &surface_vao_id);TEST_OPENGL_ERROR();
-    glBindVertexArray(surface_vao_id);TEST_OPENGL_ERROR();
-
-    nb_vbo = 0;
-    index_vbo = 0;
-    if (vertex_location != -1) nb_vbo++;
-    if (uv_location != -1) nb_vbo++;
-
-    glGenBuffers(nb_vbo, vbo_ids);TEST_OPENGL_ERROR();
-
-    if (vertex_location != -1) {
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-        glBufferData(GL_ARRAY_BUFFER, surface_vbo.size() * sizeof(float), surface_vbo.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-        glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
-        glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
-    }
-
-    if (uv_location != -1) {
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-        glBufferData(GL_ARRAY_BUFFER, uv_buffer_data.size() * sizeof(float), uv_buffer_data.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-        glVertexAttribPointer(uv_location, 2, GL_FLOAT, GL_FALSE, 0, 0);TEST_OPENGL_ERROR();
-        glEnableVertexAttribArray(uv_location);TEST_OPENGL_ERROR();
-    }
-
-    glBindVertexArray(0);
+    surface_vao = Vao::make_vao(vertex_location, surface_vbo, blue_texture_id, uv_location, surface_uv_buffer_data);
 }
 
 void init_obj_vao() {
     // Fish
-    glGenVertexArrays(1, &fish_vao_id);TEST_OPENGL_ERROR();
-    glBindVertexArray(fish_vao_id);TEST_OPENGL_ERROR();
-
-    int max_nb_vbo = 5;
-    int nb_vbo = 0;
-    int index_vbo = 0;
-    GLuint vbo_ids[max_nb_vbo];
-
-    GLint vertex_location = glGetAttribLocation(main_program->id, "position");TEST_OPENGL_ERROR();
-    GLint uv_location = glGetAttribLocation(main_program->id, "uv");TEST_OPENGL_ERROR();
-
-    if (vertex_location != -1) nb_vbo++;
-    if (uv_location != -1) nb_vbo++;
-
+    GLint vertex_location = glGetAttribLocation(fish_program->id, "position");TEST_OPENGL_ERROR();
+    GLint uv_location = glGetAttribLocation(fish_program->id, "uv");TEST_OPENGL_ERROR();
     objl::Loader loader;
-    bool is_loaded = loader.LoadFile("../image_test/objs/suzanne.obj");
+    bool is_loaded = loader.LoadFile("../image_test/objs/fish1.obj");
 
     if (!is_loaded) {
-        std::cerr << "Could not load obj file";
+        std::cerr << "Could not load obj or mtl file";
         exit(1);
     }
 
-    auto meshes = loader.LoadedMeshes[0];
+    for (size_t i = 0; i < loader.LoadedMeshes.size(); ++i) {
+        auto mesh = loader.LoadedMeshes[i];
+        GLuint texture_id = -1;
+        if (loader.LoadedMaterials.size() > i) {
+            auto texture = loader.LoadedMaterials[i];
+            glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+            glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+            glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_FLOAT, &texture.Kd);TEST_OPENGL_ERROR();
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+        }
 
-    glGenBuffers(nb_vbo, vbo_ids);TEST_OPENGL_ERROR();
+        std::vector<GLfloat> vertices;
+        std::vector<GLfloat> uv;
+        std::vector<GLuint> indices;
 
-    std::vector<GLfloat> vertices;
-    std::vector<GLfloat> uv;
 
-    for (int i = 0; i < meshes.Vertices.size(); i++) {
-        vertices.push_back(meshes.Vertices[i].Position.X);
-        vertices.push_back(meshes.Vertices[i].Position.Y);
-        vertices.push_back(meshes.Vertices[i].Position.Z);
+        for (auto index : mesh.Indices) {
+            indices.push_back(index);
+        }
 
-        uv.push_back(meshes.Vertices[i].TextureCoordinate.X);
-        uv.push_back(meshes.Vertices[i].TextureCoordinate.Y);
+        for (auto vertex : mesh.Vertices) {
+            vertices.push_back(vertex.Position.X);
+            vertices.push_back(vertex.Position.Y);
+            vertices.push_back(vertex.Position.Z);
+
+            uv.push_back(vertex.TextureCoordinate.X);
+            uv.push_back(vertex.TextureCoordinate.Y);
+        }
+
+        fish_vaos.push_back(Vao::make_vao(vertex_location, vertices, texture_id, uv_location, uv, indices));
     }
-
-    fish_vbo_size = vertices.size();
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-    glBufferData(GL_ARRAY_BUFFER, fish_vbo_size * sizeof(float), vertices.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-    glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
-    glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_ids[index_vbo++]);TEST_OPENGL_ERROR();
-    glBufferData(GL_ARRAY_BUFFER, uv.size() * sizeof(float), uv.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-    glVertexAttribPointer(uv_location, 2, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
-    glEnableVertexAttribArray(uv_location);TEST_OPENGL_ERROR();
-
-    GLuint fish_ebo_id;
-    glGenBuffers(1, &fish_ebo_id);TEST_OPENGL_ERROR();
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, fish_ebo_id);TEST_OPENGL_ERROR();
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshes.Indices.size() * sizeof(meshes.Indices[0]), meshes.Indices.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-
     glBindVertexArray(0);
 }
 
 void init_background_vao() {
     background_program->use();
     GLint vertex_location = glGetAttribLocation(background_program->id, "position");TEST_OPENGL_ERROR();
-    glGenVertexArrays(1, &background_vao_id);TEST_OPENGL_ERROR();
-    glBindVertexArray(background_vao_id);TEST_OPENGL_ERROR();
-
-    GLuint vbo_id;
-    glGenBuffers(1, &vbo_id);TEST_OPENGL_ERROR();
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_id);TEST_OPENGL_ERROR();
-    glBufferData(GL_ARRAY_BUFFER, background_vbo.size()*sizeof(float),background_vbo.data(), GL_STATIC_DRAW);TEST_OPENGL_ERROR();
-    glVertexAttribPointer(vertex_location, 3, GL_FLOAT, GL_FALSE, 0, nullptr);TEST_OPENGL_ERROR();
-    glEnableVertexAttribArray(vertex_location);TEST_OPENGL_ERROR();
-    glBindVertexArray(0);TEST_OPENGL_ERROR();
+    background_vao = Vao::make_vao(vertex_location, background_vbo, blue_texture_id);
 }
 
 void init_uniform(GLuint program_id) {
@@ -391,8 +317,10 @@ void init_uniform(GLuint program_id) {
 
     glm::mat4 model_view_matrix = view_matrix * model_matrix;
 
-    GLuint mv_loc = glGetUniformLocation(program_id, "model_view_matrix");TEST_OPENGL_ERROR();
-    glUniformMatrix4fv(mv_loc, 1, GL_FALSE, &model_view_matrix[0][0]);TEST_OPENGL_ERROR();
+    GLuint m_loc = glGetUniformLocation(program_id, "view_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(m_loc, 1, GL_FALSE, &view_matrix[0][0]);TEST_OPENGL_ERROR();
+    GLuint v_loc = glGetUniformLocation(program_id, "model_matrix");TEST_OPENGL_ERROR();
+    glUniformMatrix4fv(v_loc, 1, GL_FALSE, &model_matrix[0][0]);TEST_OPENGL_ERROR();
 
     GLuint cp_loc = glGetUniformLocation(program_id, "cameraPos");TEST_OPENGL_ERROR();
     glUniform3f(cp_loc, camera_pos.x, camera_pos.y, camera_pos.z);TEST_OPENGL_ERROR();
@@ -403,15 +331,15 @@ void init_textures() {
     auto *caustics_id = new GLuint[CAUSTICS_SIZE];
     GLint tex_location;
     GLint texture_units, combined_texture_units;
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
+    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
+    std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
 
     // Floor texture.
     GLubyte *floor_texture = tifo::load_image("../image_test/sand-texture-seamless.tga", &width, &height)->get_buffer();
 
     std::cout << "floor texture " << width << ", " <<  height << "\n";
 
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &texture_units);
-    glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined_texture_units);
-    std::cout << "Limit 1 " <<  texture_units << " limit 2 " << combined_texture_units << std::endl;
 
     glGenTextures(1, &floor_texture_id);TEST_OPENGL_ERROR();
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
@@ -454,7 +382,7 @@ void init_textures() {
     tex_location = glGetUniformLocation(main_program->id, "caustic_sampler");TEST_OPENGL_ERROR();
     glUniform1i(tex_location, 1);TEST_OPENGL_ERROR();
 
-    unsigned char blue[3] = {0, 89, 191};
+    unsigned char blue[3] = {0, 140, 179};
 
     glGenTextures(1, &blue_texture_id);TEST_OPENGL_ERROR();
     glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
@@ -479,6 +407,11 @@ bool init_shaders() {
         std::cerr << "Background Program Creation Failed:\n" << background_program->get_log() << '\n';
         return false;
     }
+    fish_program = program::make_program("../src/vertex.vert", "../src/fish.frag");
+    if (!fish_program->is_ready()) {
+        std::cerr << "Fish Program Creation Failed:" << fish_program->get_log();
+        return false;
+    }
     main_program->use();
     return true;
 }
@@ -492,14 +425,17 @@ int main(int argc, char *argv[]) {
 
     init_shaders();
 
-    init_uniform(main_program->id);
-    init_object_vbo();
-    init_obj_vao();
     init_textures();
+    init_object_vbo();
+    init_uniform(main_program->id);
+
+    fish_program->use();
+    init_uniform(fish_program->id);
+    init_obj_vao();
 
     background_program->use();
-    init_uniform(background_program->id);
     init_background_vao();
+    init_uniform(background_program->id);
 
     main_program->use();
 

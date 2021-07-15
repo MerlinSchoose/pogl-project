@@ -7,12 +7,6 @@
 
 #define LOG_MAX_SIZE 4096
 
-#define TEST_OPENGL_ERROR()                                                             \
-  do {									\
-    GLenum err = glGetError();					                        \
-    if (err != GL_NO_ERROR) std::cerr << "Shader OpenGL ERROR! " << __LINE__ << " " << glewGetErrorString(err) << std::endl;      \
-  } while(0)
-
 
 program::program() {
     is_ready_ = false;
