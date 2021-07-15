@@ -528,6 +528,62 @@ void init_grass_vao() {
 
     glBindVertexArray(0);
 }
+std::vector<Vao *> init_obj_vao(const char *filename) {
+    // Fish
+    GLint vertex_location = glGetAttribLocation(obj_program->id, "position");TEST_OPENGL_ERROR();
+    GLint uv_location = glGetAttribLocation(obj_program->id, "uv");TEST_OPENGL_ERROR();
+    objl::Loader loader;
+    bool is_loaded = loader.LoadFile(filename);
+
+    if (!is_loaded) {
+        std::cerr << "Could not load obj or mtl file";
+        exit(1);
+    }
+
+    std::vector<Vao *> obj_vaos;
+
+    for (size_t i = 0; i < loader.LoadedMeshes.size(); ++i) {
+        auto mesh = loader.LoadedMeshes[i];
+        GLuint texture_id = -1;
+
+        if (loader.LoadedMaterials.size() > i) {
+            auto texture = loader.LoadedMaterials[i];
+
+            glGenTextures(1, &texture_id);TEST_OPENGL_ERROR();
+            glActiveTexture(GL_TEXTURE0);TEST_OPENGL_ERROR();
+            glBindTexture(GL_TEXTURE_2D, texture_id);TEST_OPENGL_ERROR();
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_FLOAT, &texture.Kd);TEST_OPENGL_ERROR();
+            glGenerateMipmap(GL_TEXTURE_2D);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);TEST_OPENGL_ERROR();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);TEST_OPENGL_ERROR();
+        }
+
+        std::vector<GLfloat> vertices;
+        std::vector<GLfloat> uv;
+        std::vector<GLuint> indices;
+
+        for (auto index : mesh.Indices) {
+            indices.push_back(index);
+        }
+
+        for (auto vertex : mesh.Vertices) {
+            vertices.push_back(vertex.Position.X);
+            vertices.push_back(vertex.Position.Y);
+            vertices.push_back(vertex.Position.Z);
+
+            uv.push_back(vertex.Position.X);
+            uv.push_back(vertex.Position.Z);
+        }
+
+        obj_vaos.push_back(Vao::make_vao(vertex_location, vertices, texture_id, uv_location, uv, indices));
+    }
+
+    glBindVertexArray(0);
+    return obj_vaos;
+}
 
 void init_grass_2_vao() {
     // Grass 2
@@ -780,12 +836,12 @@ int main(int argc, char *argv[]) {
     obj_program->use();
     init_uniform(obj_program->id);
 
-    init_fish_vao();
-    init_fish_2_vao();
-    init_rock_vao();
-    init_grass_vao();
-    init_grass_2_vao();
-    init_grass_3_vao();
+    fish_vaos = init_obj_vao("../image_test/objs/Fish1.obj");
+    fish_2_vaos = init_obj_vao("../image_test/objs/Fish2.obj");
+    rock_vaos = init_obj_vao("../image_test/objs/Rock1.obj");
+    grass_vaos = init_obj_vao("../image_test/objs/Grass1.obj");
+    grass_2_vaos = init_obj_vao("../image_test/objs/Grass2.obj");
+    grass_3_vaos = init_obj_vao("../image_test/objs/Grass3.obj");
 
     background_program->use();
     init_background_vao();

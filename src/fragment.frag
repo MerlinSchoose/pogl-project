@@ -61,7 +61,7 @@ float fog(float depth) {
 
 void main() {
 
-    float caustic_intensity = clamp(exp(.005 * depth), 0, 1);
+    float caustic_intensity = clamp(exp(.01 * depth), 0, 1);
     float sun_intensity = clamp(exp(.03 * cameraDepth), 0, 1);
     float blue_intensity = clamp(exp(.025 * cameraDepth), 0, 1);
     float fog_intensity = clamp(exp(.0045 * cameraDepth), 0, 1);
@@ -76,7 +76,6 @@ void main() {
     fog_color = mix(fog_color, vec4(vec3(0), 1), 1 - darkness_intensity);
     output_color = mix(fog_color, output_color, fogv * fogv * fogv);
     output_color = mix(output_color, vec4(1), pow(sun, 6 / sun_intensity));
-    //outputcolor = vec4(vec3(z), 1);
 
 
 }

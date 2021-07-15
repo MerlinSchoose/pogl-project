@@ -43,10 +43,10 @@ float fog(float depth) {
 void main() {
 
     float caustic_intensity = clamp(exp(.005 * depth), 0, 1);
-    float fog_intensity = clamp(exp(.004 * cameraDepth), 0, 1);
+    float fog_intensity = clamp(exp(.0045 * cameraDepth), 0, 1);
     float sun_intensity = clamp(exp(.03 * cameraDepth), 0, 1);
 
-    output_color = clamp(texture(floor_sampler, vUv) + vec4(vec3(texture(caustic_sampler, vUv * 10000).r), 1) * caustic_intensity * 0.6, 0, 1);
+    output_color = clamp(texture(floor_sampler, vUv) + vec4(vec3(texture(caustic_sampler, vUv).r), 1) * caustic_intensity * 0.6, 0, 1);
     float sun = clamp(dot(normalize(ray), vec3(0, 1, 0)), 0, 1);
 
     float fogv = clamp((1000 * fog_intensity - length(ray)) / (1000 * fog_intensity - 10 * fog_intensity), 0, 1);
